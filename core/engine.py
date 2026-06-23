@@ -21,10 +21,27 @@ _SKIP_DIRS = {
 }
 
 
+def _merge(existing: Component, new: Component) -> None:
+    """Enrich an already-seen component with fields a later source resolved.
+
+    Same (ecosystem, name, version) can appear in multiple files (e.g. go.mod and
+    go.sum). Prefer a known direct/transitive flag, a known scope, and any licenses
+    over absent ones, so authoritative files (go.mod) win regardless of walk order.
+    """
+    if existing.direct is None and new.direct is not None:
+        existing.direct = new.direct
+    if existing.scope is None and new.scope is not None:
+        existing.scope = new.scope
+    if not existing.licenses and new.licenses:
+        existing.licenses = new.licenses
+
+
 def default_parsers() -> list[BaseParser]:
+    from parsers.go import GoParser
+    from parsers.maven import MavenParser
     from parsers.node import NodeParser
     from parsers.python import PythonParser
-    return [PythonParser(), NodeParser()]
+    return [PythonParser(), NodeParser(), MavenParser(), GoParser()]
 
 
 class SbomGenerator:
@@ -45,7 +62,11 @@ class SbomGenerator:
                     continue
                 for comp in found:
                     comp.source = str(path)
-                    components.setdefault(comp.key, comp)
+                    existing = components.get(comp.key)
+                    if existing is None:
+                        components[comp.key] = comp
+                    else:
+                        _merge(existing, comp)
         ordered = sorted(components.values(),
                          key=lambda c: (c.ecosystem, c.name.lower(), c.version))
         return Sbom(root=str(root), components=ordered)

@@ -5,15 +5,15 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-13%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen.svg)](tests/)
 
 Part of the KIZEN security portfolio. Where the **Secrets Scanner** finds
 credentials in code, SBOM Security maps the *dependencies* that code pulls in —
 the software supply chain — and the risk they carry. Maps to the AccuKnox
 **SBOM / supply-chain security** capability.
 
-**Status:** Phase 1 complete (CycloneDX generation, Python + Node) · **Python**
-3.10+ · **License** MIT
+**Status:** Phases 1–2 complete (CycloneDX + SPDX generation across Python, Node,
+Maven, Go) · **Python** 3.10+ · **License** MIT
 
 ---
 
@@ -31,14 +31,20 @@ the software supply chain — and the risk they carry. Maps to the AccuKnox
 
 ---
 
-## Features (Phase 1)
+## Features
 
-- **Generate CycloneDX 1.5 SBOMs** from a project tree — `generate` (to stdout or
-  a file) with metadata (timestamp, tool, root component) and per-component purl,
-  licenses, and properties (ecosystem, direct/transitive, scope, source file).
-- **Ecosystems:** Python (`requirements*.txt`, `poetry.lock`, `Pipfile.lock`) and
-  Node (`package-lock.json` v1/v2/v3, `yarn.lock`).
-- **Direct vs transitive** classification where the lockfile encodes it.
+- **CycloneDX 1.5 _and_ SPDX 2.3** output — `generate` (stdout or file),
+  `--format cyclonedx|spdx`, with metadata and per-component purl, licenses, and
+  properties (ecosystem, direct/transitive, scope, source file).
+- **Four ecosystems:**
+  - **Python** — `requirements*.txt`, `poetry.lock`, `Pipfile.lock`
+  - **Node** — `package-lock.json` v1/v2/v3, `yarn.lock` (+ license extraction)
+  - **Java** — `pom.xml` (resolves `${...}` properties & scope), `gradle.lockfile`
+  - **Go** — `go.mod` (require/`// indirect`), `go.sum`
+- **License normalization** — license strings mapped to SPDX IDs (`Apache License,
+  Version 2.0` → `Apache-2.0`); unknown values pass through.
+- **Direct vs transitive** classification where the lockfile encodes it; a `_merge`
+  step lets authoritative files (e.g. `go.mod`) enrich entries from others.
 - **Smart walk** — skips `node_modules`, `.venv`, `dist`, `target`, … so the SBOM
   reflects the project's declared dependencies, not re-ingested nested manifests.
 - **Dedup** by `(ecosystem, name, version)`.
@@ -68,6 +74,9 @@ python main.py generate --path .
 # ...or to a file, with a custom root-component name
 python main.py generate --path . -o sbom.cdx.json --app-name my-app
 
+# Emit SPDX 2.3 instead of CycloneDX
+python main.py generate --path . --format spdx -o sbom.spdx.json
+
 # Inventory the resolved components
 python main.py list-components --path .
 python main.py list-components --path . --ecosystem npm
@@ -96,9 +105,9 @@ python main.py list-components --path . --format json
 ## How it works
 
 ```
-walk project tree  →  match files to parsers  →  parse → Components  →  dedup  →  Sbom  →  CycloneDX
-  skip node_modules/   python: req/poetry/pipfile   (purl auto-built)    by key       JSON
-  .venv/dist/target    node:  package-lock/yarn
+walk project tree  →  match files to parsers  →  parse → Components  →  dedup+merge  →  Sbom  →  CycloneDX / SPDX
+  skip node_modules/   python · node · maven · go    (purl auto-built)     by key                    JSON
+  .venv/dist/target
 ```
 
 Add an ecosystem by writing a `BaseParser` subclass (declare `FILENAMES`,
@@ -114,12 +123,14 @@ SBOM-Security/
 ├── core/
 │   ├── models.py               # Component, Sbom, ComponentType
 │   ├── purl.py                 # build_purl() — package URL per ecosystem
-│   ├── engine.py               # SbomGenerator — walk, dispatch, dedup
+│   ├── engine.py               # SbomGenerator — walk, dispatch, dedup+merge
 │   ├── cyclonedx.py            # CycloneDX 1.5 serializer
+│   ├── spdx.py                 # SPDX 2.3 serializer
+│   ├── licenses.py             # license string -> SPDX-ID normalization
 │   └── logger.py               # structlog setup
-├── parsers/                    # BaseParser + python + node
-├── rules/ (later) · config/
-└── tests/test_sbom.py          # 13 pytest tests
+├── parsers/                    # BaseParser + python + node + maven + go
+├── config/                     # policy / settings (later phases)
+└── tests/                      # 23 pytest tests (test_sbom.py, test_phase2.py)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
@@ -131,7 +142,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
 | Phase | Scope | Status |
 |------:|-------|--------|
 | 1 | CycloneDX generation (Python + Node) | ✅ Complete |
-| 2 | Maven + Go parsers, license/SPDX-ID normalization, SPDX export | Planned |
+| 2 | Maven + Go parsers, license/SPDX-ID normalization, SPDX export | ✅ Complete |
 | 3 | Vulnerability correlation (OSV.dev), `audit`, severity gate | Planned |
 | 4 | Dependency drift & baseline (added/removed/upgraded) | Planned |
 | 5 | Policy & license compliance (allow/deny, banned packages) | Planned |
@@ -142,7 +153,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
 ## Testing
 
 ```bash
-pytest                # 13 tests
+pytest                # 23 tests
 pytest --cov=core --cov=parsers
 ```
 

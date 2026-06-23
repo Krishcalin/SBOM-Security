@@ -12,10 +12,24 @@ import json
 import re
 from pathlib import Path
 
+from core.licenses import normalize_spdx
 from core.models import Component
 from parsers.base import BaseParser
 
 _YARN_VERSION = re.compile(r'^\s+version:?\s+"?([^"\s]+)"?', re.MULTILINE)
+
+
+def _licenses(info: dict) -> list[str]:
+    """Extract SPDX licenses from an npm package-lock entry (string or legacy dict/list)."""
+    raw = info.get("license") or info.get("licenses")
+    found: list[str] = []
+    for item in (raw if isinstance(raw, list) else [raw]):
+        if isinstance(item, dict):
+            item = item.get("type")
+        norm = normalize_spdx(item)
+        if norm:
+            found.append(norm)
+    return found
 
 
 class NodeParser(BaseParser):
@@ -49,7 +63,8 @@ class NodeParser(BaseParser):
                 # a single "node_modules/" segment => top-level (direct) install
                 out.append(Component(name=name, version=version, ecosystem=self.ECOSYSTEM,
                                      direct=loc.count("node_modules/") == 1,
-                                     scope="dev" if info.get("dev") else None))
+                                     scope="dev" if info.get("dev") else None,
+                                     licenses=_licenses(info)))
         return out
 
     def _npm_v1(self, deps: dict, direct: bool = True) -> list[Component]:
@@ -60,7 +75,8 @@ class NodeParser(BaseParser):
             version = info.get("version", "")
             if version:
                 out.append(Component(name=name, version=version, ecosystem=self.ECOSYSTEM,
-                                     direct=direct, scope="dev" if info.get("dev") else None))
+                                     direct=direct, scope="dev" if info.get("dev") else None,
+                                     licenses=_licenses(info)))
             nested = info.get("dependencies")
             if nested:
                 out.extend(self._npm_v1(nested, direct=False))

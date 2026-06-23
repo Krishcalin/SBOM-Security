@@ -9,7 +9,7 @@ of the four KIZEN tools derived from the AccuKnox "Code to Runtime" platform;
 maps to AccuKnox **SBOM / supply-chain security**.
 
 **Repository**: https://github.com/Krishcalin/SBOM-Security
-**Python**: 3.10+ · **License**: MIT · **Status**: Phase 1 complete (13 tests)
+**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-2 complete (23 tests)
 
 ---
 
@@ -22,15 +22,20 @@ SBOM-Security/
 │   ├── __init__.py             # __version__
 │   ├── models.py               # Component, Sbom, ComponentType
 │   ├── purl.py                 # build_purl() — package URL per ecosystem
-│   ├── engine.py               # SbomGenerator — walk tree, dispatch to parsers, dedup
+│   ├── engine.py               # SbomGenerator — walk tree, dispatch to parsers, dedup+merge
 │   ├── cyclonedx.py            # CycloneDX 1.5 JSON serializer
+│   ├── spdx.py                 # SPDX 2.3 JSON serializer
+│   ├── licenses.py             # license string -> SPDX-ID normalization
 │   └── logger.py               # structlog setup
 ├── parsers/
 │   ├── base.py                 # BaseParser ABC (matches / parse)
 │   ├── python.py               # requirements.txt, poetry.lock, Pipfile.lock
-│   └── node.py                 # package-lock.json (v1/v2/v3), yarn.lock
+│   ├── node.py                 # package-lock.json (v1/v2/v3), yarn.lock (+ licenses)
+│   ├── maven.py                # pom.xml (props/scope), gradle.lockfile
+│   └── go.py                   # go.mod (require/indirect), go.sum
 ├── config/                     # policy / settings (later phases)
-├── tests/test_sbom.py          # 13 pytest tests
+├── tests/test_sbom.py          # 13 pytest tests (Phase 1)
+├── tests/test_phase2.py        # 10 pytest tests (Maven/Go/licenses/SPDX)
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -53,6 +58,13 @@ SBOM-Security/
   preserving for golang). Vulnerability correlation (Phase 3) keys on these.
 - **`cyclonedx.to_cyclonedx(sbom)` / `dumps(sbom)`** — CycloneDX 1.5 JSON with
   metadata (timestamp, tool, root component) and per-component purl + properties.
+- **`spdx.to_spdx(sbom)` / `dumps(sbom)`** — SPDX 2.3 JSON; each component is a
+  package with a purl externalRef; DOCUMENT DESCRIBES root, root DEPENDS_ON each.
+- **`licenses.normalize_spdx(raw)`** — map license spellings to SPDX IDs (unknown
+  values pass through). Node parser populates `Component.licenses` from lockfiles.
+- **`engine._merge(existing, new)`** — when the same component appears in multiple
+  files, prefer a known `direct`/`scope`/`licenses` over an absent one (so go.mod's
+  direct flags beat go.sum regardless of walk order).
 
 ### Design principles
 
@@ -74,8 +86,8 @@ SBOM-Security/
 |-----------|---------------|------|
 | Python (pypi) | requirements*.txt, poetry.lock, Pipfile.lock (P1) | `pkg:pypi/...` |
 | Node (npm) | package-lock.json v1/v2/v3, yarn.lock (P1) | `pkg:npm/...` |
-| Java (maven) | pom.xml, gradle.lockfile (P2) | `pkg:maven/...` |
-| Go (golang) | go.mod, go.sum (P2) | `pkg:golang/...` |
+| Java (maven) | pom.xml, gradle.lockfile (P2 ✓) | `pkg:maven/...` |
+| Go (golang) | go.mod, go.sum (P2 ✓) | `pkg:golang/...` |
 
 ---
 
@@ -90,10 +102,13 @@ SBOM-Security/
 - [x] CLI: `generate` (stdout/file), `list-components` (table/json)
 - [x] 13 pytest tests
 
-### Phase 2 — Ecosystem breadth + format polish
-- [ ] Maven parser (pom.xml, gradle.lockfile) + Go parser (go.mod/go.sum)
-- [ ] License extraction + SPDX-ID normalization
-- [ ] SPDX 2.3 export (`--format spdx`)
+### Phase 2 — Ecosystem breadth + format polish (COMPLETE)
+- [x] Maven parser (pom.xml with property/scope resolution, gradle.lockfile)
+- [x] Go parser (go.mod require/indirect, go.sum with /go.mod de-suffixing)
+- [x] License extraction (npm lockfiles) + `normalize_spdx()` SPDX-ID mapping
+- [x] SPDX 2.3 JSON export (`generate --format spdx`)
+- [x] Engine `_merge()` enriches dups (direct/scope/licenses win over absent)
+- [x] 10 new pytest tests (23 total)
 
 ### Phase 3 — Vulnerability correlation
 - [ ] OSV.dev batch API client → attach `vulnerabilities` (CVE, severity, fixed-in)
@@ -127,6 +142,7 @@ SBOM-Security/
 ```bash
 python main.py generate --path .                       # CycloneDX to stdout
 python main.py generate --path . -o sbom.cdx.json      # write to file
+python main.py generate --path . --format spdx -o sbom.spdx.json
 python main.py list-components --path . --ecosystem npm
 python main.py list-components --path . --format json
 ```

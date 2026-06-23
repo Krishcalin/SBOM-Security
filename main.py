@@ -11,7 +11,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from core.cyclonedx import dumps
+from core import cyclonedx, spdx
 from core.engine import SbomGenerator
 from core.logger import configure_logging
 
@@ -28,17 +28,20 @@ def cli(log_level: str) -> None:
 @cli.command("generate")
 @click.option("--path", default=".", help="Project directory (or a single manifest file).")
 @click.option("-o", "--output", default=None, help="Write SBOM here (default: stdout).")
+@click.option("--format", "fmt", type=click.Choice(["cyclonedx", "spdx"]), default="cyclonedx",
+              help="SBOM format (default: cyclonedx).")
 @click.option("--app-name", default=None, help="Name for the SBOM's root component.")
-def generate(path: str, output: str | None, app_name: str | None) -> None:
-    """Generate a CycloneDX SBOM for PATH."""
+def generate(path: str, output: str | None, fmt: str, app_name: str | None) -> None:
+    """Generate an SBOM (CycloneDX or SPDX) for PATH."""
     sbom = SbomGenerator().generate(path)
-    text = dumps(sbom, app_name=app_name)
+    serializer = spdx if fmt == "spdx" else cyclonedx
+    text = serializer.dumps(sbom, app_name=app_name)
     if output:
         from pathlib import Path
         out = Path(output)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
-        console.print(f"[green]SBOM written:[/] {out} "
+        console.print(f"[green]{fmt} SBOM written:[/] {out} "
                       f"({sbom.count} components across {len(sbom.by_ecosystem())} ecosystem(s))")
     else:
         click.echo(text)
