@@ -26,6 +26,7 @@ SBOM-Security/
 │   ├── cyclonedx.py            # CycloneDX 1.5 JSON serializer
 │   ├── spdx.py                 # SPDX 2.3 JSON serializer
 │   ├── licenses.py             # license string -> SPDX-ID normalization
+│   ├── banner.py               # ANSI-Shadow CLI banner (bare invocation)
 │   └── logger.py               # structlog setup
 ├── parsers/
 │   ├── base.py                 # BaseParser ABC (matches / parse)
@@ -34,6 +35,7 @@ SBOM-Security/
 │   ├── maven.py                # pom.xml (props/scope), gradle.lockfile
 │   └── go.py                   # go.mod (require/indirect), go.sum
 ├── config/                     # policy / settings (later phases)
+├── docs/banner.svg             # README banner image
 ├── tests/test_sbom.py          # 13 pytest tests (Phase 1)
 ├── tests/test_phase2.py        # 10 pytest tests (Maven/Go/licenses/SPDX)
 ├── pyproject.toml

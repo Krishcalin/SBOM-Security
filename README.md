@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.svg" alt="SBOM Security" width="100%">
+</p>
+
 # SBOM Security
 
 > Generate **CycloneDX** SBOMs, correlate components with known vulnerabilities,

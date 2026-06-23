@@ -11,18 +11,26 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from core import cyclonedx, spdx
+from core import __version__, cyclonedx, spdx
+from core.banner import render_banner
 from core.engine import SbomGenerator
 from core.logger import configure_logging
 
 console = Console()
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option("--log-level", default="WARNING")
-def cli(log_level: str) -> None:
+@click.option("--no-banner", is_flag=True, default=False, help="Suppress the startup banner.")
+@click.version_option(__version__, "-V", "--version", prog_name="sbom-security")
+@click.pass_context
+def cli(ctx: click.Context, log_level: str, no_banner: bool) -> None:
     """Generate SBOMs and analyze software supply-chain risk."""
     configure_logging(log_level)
+    if ctx.invoked_subcommand is None:
+        if not no_banner:
+            render_banner(console)
+        click.echo(ctx.get_help())
 
 
 @cli.command("generate")
