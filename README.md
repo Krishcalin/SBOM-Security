@@ -9,15 +9,15 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-33%20passing-brightgreen.svg)](tests/)
 
 Part of the KIZEN security portfolio. Where the **Secrets Scanner** finds
 credentials in code, SBOM Security maps the *dependencies* that code pulls in —
 the software supply chain — and the risk they carry. Maps to the AccuKnox
 **SBOM / supply-chain security** capability.
 
-**Status:** Phases 1–2 complete (CycloneDX + SPDX generation across Python, Node,
-Maven, Go) · **Python** 3.10+ · **License** MIT
+**Status:** Phases 1–3 complete (CycloneDX + SPDX generation across Python, Node,
+Maven, Go · OSV vulnerability correlation) · **Python** 3.10+ · **License** MIT
 
 ---
 
@@ -45,6 +45,10 @@ Maven, Go) · **Python** 3.10+ · **License** MIT
   - **Node** — `package-lock.json` v1/v2/v3, `yarn.lock` (+ license extraction)
   - **Java** — `pom.xml` (resolves `${...}` properties & scope), `gradle.lockfile`
   - **Go** — `go.mod` (require/`// indirect`), `go.sum`
+- **Vulnerability correlation (OSV.dev)** — `audit` queries OSV by purl, attaches
+  CVEs with **CVSS score, severity, and fixed-in version** to each component, and
+  gates CI with `--fail-on <severity>`. Network errors fail safe (no false
+  positives); CycloneDX output gains a `vulnerabilities` array.
 - **License normalization** — license strings mapped to SPDX IDs (`Apache License,
   Version 2.0` → `Apache-2.0`); unknown values pass through.
 - **Direct vs transitive** classification where the lockfile encodes it; a `_merge`
@@ -80,6 +84,11 @@ python main.py generate --path . -o sbom.cdx.json --app-name my-app
 
 # Emit SPDX 2.3 instead of CycloneDX
 python main.py generate --path . --format spdx -o sbom.spdx.json
+
+# Correlate components with known vulnerabilities (OSV.dev)
+python main.py audit --path .
+python main.py audit --path . --fail-on high            # CI gate on HIGH+
+python main.py audit --path . --format cyclonedx        # SBOM enriched with vulns
 
 # Inventory the resolved components
 python main.py list-components --path .
@@ -131,10 +140,13 @@ SBOM-Security/
 │   ├── cyclonedx.py            # CycloneDX 1.5 serializer
 │   ├── spdx.py                 # SPDX 2.3 serializer
 │   ├── licenses.py             # license string -> SPDX-ID normalization
+│   ├── cvss.py                 # CVSS v3.x base score + severity bucket
+│   ├── osv.py                  # OSV.dev client + run_audit() correlation
+│   ├── banner.py               # CLI banner
 │   └── logger.py               # structlog setup
 ├── parsers/                    # BaseParser + python + node + maven + go
 ├── config/                     # policy / settings (later phases)
-└── tests/                      # 23 pytest tests (test_sbom.py, test_phase2.py)
+└── tests/                      # 33 pytest tests (test_sbom / test_phase2 / test_phase3)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
@@ -147,7 +159,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
 |------:|-------|--------|
 | 1 | CycloneDX generation (Python + Node) | ✅ Complete |
 | 2 | Maven + Go parsers, license/SPDX-ID normalization, SPDX export | ✅ Complete |
-| 3 | Vulnerability correlation (OSV.dev), `audit`, severity gate | Planned |
+| 3 | Vulnerability correlation (OSV.dev), `audit`, severity gate | ✅ Complete |
 | 4 | Dependency drift & baseline (added/removed/upgraded) | Planned |
 | 5 | Policy & license compliance (allow/deny, banned packages) | Planned |
 | 6 | HTML/JSON/CSV reports, pre-commit + CI, GRC mapping (CISA/NTIA/SCVS) | Planned |
@@ -157,9 +169,11 @@ See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
 ## Testing
 
 ```bash
-pytest                # 23 tests
+pytest                # 33 tests
 pytest --cov=core --cov=parsers
 ```
+
+Vulnerability tests inject a fake HTTP layer and make **no real network calls**.
 
 ## License
 

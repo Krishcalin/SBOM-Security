@@ -9,7 +9,7 @@ of the four KIZEN tools derived from the AccuKnox "Code to Runtime" platform;
 maps to AccuKnox **SBOM / supply-chain security**.
 
 **Repository**: https://github.com/Krishcalin/SBOM-Security
-**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-2 complete (23 tests)
+**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-3 complete (33 tests)
 
 ---
 
@@ -26,6 +26,8 @@ SBOM-Security/
 │   ├── cyclonedx.py            # CycloneDX 1.5 JSON serializer
 │   ├── spdx.py                 # SPDX 2.3 JSON serializer
 │   ├── licenses.py             # license string -> SPDX-ID normalization
+│   ├── cvss.py                 # CVSS v3.x vector -> base score + severity bucket
+│   ├── osv.py                  # OSV.dev client + run_audit() vuln correlation
 │   ├── banner.py               # ANSI-Shadow CLI banner (bare invocation)
 │   └── logger.py               # structlog setup
 ├── parsers/
@@ -38,6 +40,7 @@ SBOM-Security/
 ├── docs/banner.svg             # README banner image
 ├── tests/test_sbom.py          # 13 pytest tests (Phase 1)
 ├── tests/test_phase2.py        # 10 pytest tests (Maven/Go/licenses/SPDX)
+├── tests/test_phase3.py        # 10 pytest tests (CVSS/OSV/audit, no network)
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -67,6 +70,13 @@ SBOM-Security/
 - **`engine._merge(existing, new)`** — when the same component appears in multiple
   files, prefer a known `direct`/`scope`/`licenses` over an absent one (so go.mod's
   direct flags beat go.sum regardless of walk order).
+- **`osv.OSVClient` / `run_audit(components, client)`** — query OSV.dev by purl
+  (batched), fetch each unique advisory once, parse into `Vulnerability` (CVE/OSV id,
+  CVSS via `cvss.base_score`, severity bucket, fixed-in), attach to components.
+  Injectable HTTP; network errors fail **safe** (`run_audit` returns False, no false
+  positives). CycloneDX output gains a `vulnerabilities` array when present.
+- **`cvss.base_score(vector)`** — CVSS v3.x base score; `severity_from_score()`
+  buckets none/low/medium/high/critical.
 
 ### Design principles
 
@@ -112,9 +122,13 @@ SBOM-Security/
 - [x] Engine `_merge()` enriches dups (direct/scope/licenses win over absent)
 - [x] 10 new pytest tests (23 total)
 
-### Phase 3 — Vulnerability correlation
-- [ ] OSV.dev batch API client → attach `vulnerabilities` (CVE, severity, fixed-in)
-- [ ] `audit` command; CVSS severity; `--fail-on <severity>` CI gate
+### Phase 3 — Vulnerability correlation (COMPLETE)
+- [x] `core/osv.py` — OSV.dev batch query by purl + per-id detail fetch (cached),
+      fail-safe on network error; `core/cvss.py` v3.x base-score parser
+- [x] `Vulnerability` model attached to components; CVE/OSV id, CVSS, severity, fixed-in
+- [x] `audit` command (table/json/cyclonedx) + `--fail-on <severity>` CI gate
+- [x] CycloneDX output gains a `vulnerabilities` array
+- [x] 10 new pytest tests (33 total), offline (HTTP injected); live OSV verified
 
 ### Phase 4 — Dependency drift & baseline
 - [ ] Diff two SBOMs: added / removed / upgraded / downgraded components
@@ -145,6 +159,9 @@ SBOM-Security/
 python main.py generate --path .                       # CycloneDX to stdout
 python main.py generate --path . -o sbom.cdx.json      # write to file
 python main.py generate --path . --format spdx -o sbom.spdx.json
+python main.py audit --path .                           # OSV vuln correlation
+python main.py audit --path . --fail-on high            # CI gate
+python main.py audit --path . --format cyclonedx        # SBOM + vulnerabilities
 python main.py list-components --path . --ecosystem npm
 python main.py list-components --path . --format json
 ```

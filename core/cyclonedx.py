@@ -43,9 +43,33 @@ def _component_json(c: Component) -> dict:
     return out
 
 
+def _bom_ref(c: Component) -> str:
+    return c.purl or f"{c.name}@{c.version}"
+
+
+def _vulnerabilities_json(sbom: Sbom) -> list[dict]:
+    out: list[dict] = []
+    for c in sbom.components:
+        for v in c.vulnerabilities:
+            rating: dict = {"severity": v.severity.value}
+            if v.cvss is not None:
+                rating |= {"method": "CVSSv3", "score": v.cvss}
+            entry = {
+                "bom-ref": f"{v.id}/{_bom_ref(c)}",
+                "id": v.id,
+                "source": {"name": "OSV", "url": v.reference},
+                "ratings": [rating],
+                "affects": [{"ref": _bom_ref(c)}],
+            }
+            if v.summary:
+                entry["description"] = v.summary
+            out.append(entry)
+    return out
+
+
 def to_cyclonedx(sbom: Sbom, app_name: str | None = None) -> dict:
     name = app_name or Path(sbom.root).resolve().name or "root"
-    return {
+    doc = {
         "bomFormat": "CycloneDX",
         "specVersion": SPEC_VERSION,
         "serialNumber": f"urn:uuid:{uuid4()}",
@@ -58,6 +82,10 @@ def to_cyclonedx(sbom: Sbom, app_name: str | None = None) -> dict:
         },
         "components": [_component_json(c) for c in sbom.components],
     }
+    vulns = _vulnerabilities_json(sbom)
+    if vulns:
+        doc["vulnerabilities"] = vulns
+    return doc
 
 
 def dumps(sbom: Sbom, app_name: str | None = None) -> str:

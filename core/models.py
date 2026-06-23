@@ -18,6 +18,34 @@ class ComponentType(str, Enum):
     OS = "operating-system"
 
 
+class VulnSeverity(str, Enum):
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+    UNKNOWN = "unknown"
+
+
+# ordering for --fail-on gates (UNKNOWN sorts low so it won't trip high/critical gates)
+SEVERITY_ORDER = {
+    VulnSeverity.UNKNOWN: 0, VulnSeverity.NONE: 0, VulnSeverity.LOW: 1,
+    VulnSeverity.MEDIUM: 2, VulnSeverity.HIGH: 3, VulnSeverity.CRITICAL: 4,
+}
+
+
+@dataclass
+class Vulnerability:
+    id: str                              # display id (CVE preferred, else OSV id)
+    osv_id: str = ""                     # original OSV id (GHSA-…/PYSEC-…)
+    aliases: list[str] = field(default_factory=list)
+    summary: str = ""
+    severity: VulnSeverity = VulnSeverity.UNKNOWN
+    cvss: float | None = None
+    fixed: list[str] = field(default_factory=list)
+    reference: str = ""
+
+
 @dataclass
 class Component:
     name: str
@@ -29,6 +57,7 @@ class Component:
     direct: bool | None = None           # direct dependency vs transitive (if known)
     scope: str | None = None             # runtime | dev | optional (if known)
     source: str = ""                     # manifest/lockfile it was found in
+    vulnerabilities: list = field(default_factory=list)  # list[Vulnerability], populated by audit
 
     def __post_init__(self) -> None:
         if not self.purl:
