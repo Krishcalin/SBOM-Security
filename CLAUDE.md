@@ -8,7 +8,7 @@ dependency drift between scans, and enforces license/security policy in CI. Thir
 of the four KIZEN tools derived from the AccuKnox "Code to Runtime" platform;
 maps to AccuKnox **SBOM / supply-chain security**.
 
-**Repository**: (to be created on GitHub — account Krishcalin)
+**Repository**: https://github.com/Krishcalin/SBOM-Security
 **Python**: 3.10+ · **License**: MIT · **Status**: Phase 1 complete (13 tests)
 
 ---
