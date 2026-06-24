@@ -1,0 +1,34 @@
+# SBOM Security policy — copy to policy.yaml and adjust.
+# Evaluated by:  sbom-security check --policy policy.yaml
+# Any "error"-level violation fails the command (exit 1); "warn" does not.
+
+licenses:
+  # If 'allow' is non-empty it becomes an allowlist: a component must carry at
+  # least one of these SPDX IDs, or it's a violation. Leave empty to disable.
+  allow: []
+
+  # Forbidden SPDX license IDs (copyleft examples shown).
+  deny:
+    - GPL-3.0-only
+    - GPL-2.0-only
+    - AGPL-3.0-only
+    - LGPL-3.0-only
+
+  # How to treat components with no/unknown license: allow | warn | deny
+  unknown: warn
+
+# Packages that must never appear (e.g. known-malicious, deprecated, internal-only).
+# Match by name (required); optionally pin ecosystem and/or version.
+banned_packages:
+  - name: event-stream        # the 2018 npm supply-chain incident
+    ecosystem: npm
+    reason: "known-malicious (CVE-2018-1000620 era)"
+  - name: request
+    ecosystem: npm
+    reason: "deprecated; use a maintained HTTP client"
+
+# Vulnerability gate — tolerate up to this severity; anything strictly higher is a
+# violation. Requires an OSV audit (run automatically unless --offline).
+# One of: none | low | medium | high | critical
+vulnerabilities:
+  max_severity: high

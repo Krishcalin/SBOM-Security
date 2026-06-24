@@ -9,7 +9,7 @@ of the four KIZEN tools derived from the AccuKnox "Code to Runtime" platform;
 maps to AccuKnox **SBOM / supply-chain security**.
 
 **Repository**: https://github.com/Krishcalin/SBOM-Security
-**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-4 complete (40 tests)
+**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-5 complete (49 tests)
 
 ---
 
@@ -31,6 +31,7 @@ SBOM-Security/
 │   ├── version.py              # cross-ecosystem version comparison
 │   ├── drift.py                # diff() two component sets -> added/removed/up/downgraded
 │   ├── baseline.py             # Baseline snapshot (components + known vuln ids)
+│   ├── policy.py               # Policy.evaluate() -> license/package/vuln Violations
 │   ├── banner.py               # ANSI-Shadow CLI banner (bare invocation)
 │   └── logger.py               # structlog setup
 ├── parsers/
@@ -39,12 +40,13 @@ SBOM-Security/
 │   ├── node.py                 # package-lock.json (v1/v2/v3), yarn.lock (+ licenses)
 │   ├── maven.py                # pom.xml (props/scope), gradle.lockfile
 │   └── go.py                   # go.mod (require/indirect), go.sum
-├── config/                     # policy / settings (later phases)
+├── config/policy.example.yaml  # license/banned-package/severity policy template
 ├── docs/banner.svg             # README banner image
 ├── tests/test_sbom.py          # 13 pytest tests (Phase 1)
 ├── tests/test_phase2.py        # 10 pytest tests (Maven/Go/licenses/SPDX)
 ├── tests/test_phase3.py        # 10 pytest tests (CVSS/OSV/audit, no network)
 ├── tests/test_phase4.py        # 7 pytest tests (version/drift/baseline)
+├── tests/test_phase5.py        # 9 pytest tests (policy/licenses/banned/vuln gate)
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -86,6 +88,9 @@ SBOM-Security/
 - **`Baseline`** — snapshot of components + known vuln ids; `from_sbom`, `write`,
   `load`, `as_components()` (feeds `drift.diff`), `knows_vuln(v)` (matches id/osv_id/
   aliases). Powers `drift` and `audit --baseline` (report only *new* vulns).
+- **`Policy.evaluate(sbom)`** — YAML-driven license allow/deny + unknown-license
+  mode, banned packages (name/ecosystem/version), and a max vulnerability severity
+  gate → `Violation`s (error/warn). `needs_audit` tells the CLI to run OSV first.
 
 ### Design principles
 
@@ -147,9 +152,13 @@ SBOM-Security/
 - [x] `audit --baseline` reports only newly-introduced vulnerabilities
 - [x] 7 new pytest tests (40 total); drift + baseline workflows verified live
 
-### Phase 5 — Policy & license compliance
-- [ ] License allow/deny policy (YAML), banned packages, max-severity gates
-- [ ] Pinning/known-good enforcement
+### Phase 5 — Policy & license compliance (COMPLETE)
+- [x] `core/policy.py` — `Policy.load()` (YAML) + `evaluate()` → license allow/deny,
+      unknown-license mode (allow/warn/deny), banned packages, max-severity vuln gate
+- [x] `config/policy.example.yaml` template
+- [x] `check` command (table/json), runs OSV audit when the policy has a severity
+      gate (unless `--offline`); fails the build on any error-level violation
+- [x] 9 new pytest tests (49 total); license/banned/vuln gates verified live
 
 ### Phase 6 — Reporting, hooks & GRC
 - [ ] HTML/JSON/CSV reports; pre-commit hook + GitHub Actions CI
@@ -178,6 +187,7 @@ python main.py audit --path . --format cyclonedx        # SBOM + vulnerabilities
 python main.py baseline --path . --audit -o sbom-baseline.json   # snapshot + known vulns
 python main.py drift --path . --baseline sbom-baseline.json      # added/removed/up/downgraded
 python main.py audit --path . --baseline sbom-baseline.json      # only NEW vulnerabilities
+python main.py check --path . --policy config/policy.example.yaml # license/package/vuln policy
 python main.py list-components --path . --ecosystem npm
 python main.py list-components --path . --format json
 ```

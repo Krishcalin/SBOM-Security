@@ -136,6 +136,49 @@ def _sev_style(sev: VulnSeverity) -> str:
     return _VULN_STYLE.get(sev, sev.value)
 
 
+@cli.command("check")
+@click.option("--path", default=".", help="Project directory to scan.")
+@click.option("--policy", "policy_path", default=None,
+              help="Policy YAML (default: built-in permissive policy).")
+@click.option("--offline", is_flag=True, default=False,
+              help="Skip the OSV audit even if the policy has a severity gate.")
+@click.option("--timeout", type=float, default=20.0)
+@click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
+def check(path: str, policy_path: str | None, offline: bool, timeout: float, fmt: str) -> None:
+    """Evaluate PATH against a license/package/vulnerability policy."""
+    from core.policy import Policy
+
+    policy = Policy.load(policy_path) if policy_path else Policy.default()
+    sbom = SbomGenerator().generate(path)
+    if policy.needs_audit and not offline:
+        from core.osv import OSVClient, run_audit
+        run_audit(sbom.components, OSVClient(timeout=timeout))
+
+    violations = policy.evaluate(sbom)
+    errors = [v for v in violations if v.level == "error"]
+
+    if fmt == "json":
+        console.print_json(data={
+            "root": sbom.root, "components": sbom.count,
+            "violations": len(violations), "errors": len(errors),
+            "items": [{"level": v.level, "kind": v.kind, "component": v.component,
+                       "detail": v.detail, "purl": v.purl} for v in violations],
+        })
+    elif not violations:
+        console.print("[green]Policy check passed — no violations.[/]")
+        console.print(f"[dim]{sbom.count} components evaluated[/]")
+    else:
+        table = Table("Level", "Kind", "Component", "Detail",
+                      title=f"Policy violations — {len(violations)} ({len(errors)} error)")
+        for v in violations:
+            lvl = "[bold red]error[/]" if v.level == "error" else "[yellow]warn[/]"
+            table.add_row(lvl, v.kind, v.component, v.detail)
+        console.print(table)
+
+    if errors:
+        raise SystemExit(1)
+
+
 @cli.command("baseline")
 @click.option("--path", default=".", help="Project directory to snapshot.")
 @click.option("-o", "--output", default="sbom-baseline.json", help="Baseline output path.")
