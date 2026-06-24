@@ -1,0 +1,25 @@
+# Consumer-facing pre-commit hooks.
+# In a project's .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/Krishcalin/SBOM-Security
+#       rev: v0.1.0
+#       hooks:
+#         - id: sbom-audit          # fail on critical vulnerabilities
+#         # - id: sbom-policy       # enforce policy.yaml (needs a policy file)
+#
+- id: sbom-audit
+  name: SBOM vulnerability audit
+  description: Generate an SBOM and fail on critical known vulnerabilities.
+  entry: sbom-security audit --fail-on critical
+  language: python
+  pass_filenames: false
+  always_run: true
+
+- id: sbom-policy
+  name: SBOM policy check
+  description: Enforce the license/package/vulnerability policy in policy.yaml.
+  entry: sbom-security check --policy policy.yaml
+  language: python
+  pass_filenames: false
+  always_run: true

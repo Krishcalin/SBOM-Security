@@ -9,7 +9,7 @@ of the four KIZEN tools derived from the AccuKnox "Code to Runtime" platform;
 maps to AccuKnox **SBOM / supply-chain security**.
 
 **Repository**: https://github.com/Krishcalin/SBOM-Security
-**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-5 complete (49 tests)
+**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-6 COMPLETE (55 tests)
 
 ---
 
@@ -32,6 +32,8 @@ SBOM-Security/
 │   ├── drift.py                # diff() two component sets -> added/removed/up/downgraded
 │   ├── baseline.py             # Baseline snapshot (components + known vuln ids)
 │   ├── policy.py               # Policy.evaluate() -> license/package/vuln Violations
+│   ├── reporter.py             # JSON/CSV/HTML combined report (inline HTML, no Jinja2)
+│   ├── compliance.py           # NTIA/CISA/OWASP SCVS/NIST SSDF GRC mapping
 │   ├── banner.py               # ANSI-Shadow CLI banner (bare invocation)
 │   └── logger.py               # structlog setup
 ├── parsers/
@@ -41,12 +43,15 @@ SBOM-Security/
 │   ├── maven.py                # pom.xml (props/scope), gradle.lockfile
 │   └── go.py                   # go.mod (require/indirect), go.sum
 ├── config/policy.example.yaml  # license/banned-package/severity policy template
+├── .pre-commit-hooks.yaml      # consumer hooks (sbom-audit, sbom-policy)
+├── .github/workflows/ci.yml    # test matrix + SBOM artifact + vuln gate
 ├── docs/banner.svg             # README banner image
 ├── tests/test_sbom.py          # 13 pytest tests (Phase 1)
 ├── tests/test_phase2.py        # 10 pytest tests (Maven/Go/licenses/SPDX)
 ├── tests/test_phase3.py        # 10 pytest tests (CVSS/OSV/audit, no network)
 ├── tests/test_phase4.py        # 7 pytest tests (version/drift/baseline)
 ├── tests/test_phase5.py        # 9 pytest tests (policy/licenses/banned/vuln gate)
+├── tests/test_phase6.py        # 6 pytest tests (compliance/reporting)
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -91,6 +96,11 @@ SBOM-Security/
 - **`Policy.evaluate(sbom)`** — YAML-driven license allow/deny + unknown-license
   mode, banned packages (name/ecosystem/version), and a max vulnerability severity
   gate → `Violation`s (error/warn). `needs_audit` tells the CLI to run OSV first.
+- **`reporter`** — `result_to_dict()` (canonical payload: components, vulns, policy
+  violations, compliance) + `to_csv()`/`to_html()` (self-contained, escaped) +
+  `write_report(path)` (dispatch by extension). Powers the `report` command.
+- **`compliance`** — `ntia_minimum_elements(sbom)` scores NTIA element coverage;
+  `framework_summary()` maps CISA/OWASP SCVS/NIST SSDF controls with live status.
 
 ### Design principles
 
@@ -160,9 +170,18 @@ SBOM-Security/
       gate (unless `--offline`); fails the build on any error-level violation
 - [x] 9 new pytest tests (49 total); license/banned/vuln gates verified live
 
-### Phase 6 — Reporting, hooks & GRC
-- [ ] HTML/JSON/CSV reports; pre-commit hook + GitHub Actions CI
-- [ ] Compliance mapping (CISA SBOM minimums, NTIA, OWASP SCVS, NIST SSDF)
+### Phase 6 — Reporting, hooks & GRC (COMPLETE)
+- [x] `core/reporter.py` — combined JSON/CSV/self-contained HTML report
+      (SBOM + vulns + policy + compliance); `report` command (format by extension)
+- [x] `core/compliance.py` — NTIA minimum-elements coverage + CISA / OWASP SCVS /
+      NIST SSDF control mapping, rolled into the report
+- [x] `.pre-commit-hooks.yaml` (sbom-audit, sbom-policy) + README adoption snippet
+- [x] `.github/workflows/ci.yml` — pytest matrix (3.10-3.12) + SBOM artifact + vuln gate
+- [x] 6 new pytest tests (55 total)
+
+**All 6 planned phases complete.** Possible future work: SPDX vuln profile, more
+ecosystems (Ruby/Rust/.NET), VEX, transitive-graph relationships, GitHub Advisory
+enrichment, signed SBOM attestations.
 
 ---
 
@@ -188,6 +207,7 @@ python main.py baseline --path . --audit -o sbom-baseline.json   # snapshot + kn
 python main.py drift --path . --baseline sbom-baseline.json      # added/removed/up/downgraded
 python main.py audit --path . --baseline sbom-baseline.json      # only NEW vulnerabilities
 python main.py check --path . --policy config/policy.example.yaml # license/package/vuln policy
+python main.py report --path . -o report.html --policy config/policy.example.yaml  # combined report
 python main.py list-components --path . --ecosystem npm
 python main.py list-components --path . --format json
 ```

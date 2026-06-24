@@ -9,16 +9,16 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-49%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-55%20passing-brightgreen.svg)](tests/)
 
 Part of the KIZEN security portfolio. Where the **Secrets Scanner** finds
 credentials in code, SBOM Security maps the *dependencies* that code pulls in —
 the software supply chain — and the risk they carry. Maps to the AccuKnox
 **SBOM / supply-chain security** capability.
 
-**Status:** Phases 1–5 complete (CycloneDX + SPDX across Python, Node, Maven, Go ·
-OSV vulnerability correlation · dependency drift & baseline · policy compliance) ·
-**Python** 3.10+ · **License** MIT
+**Status:** All 6 phases complete — CycloneDX + SPDX across Python, Node, Maven, Go ·
+OSV vulnerability correlation · dependency drift & baseline · policy compliance ·
+reporting & GRC · **Python** 3.10+ · **License** MIT
 
 ---
 
@@ -58,6 +58,11 @@ OSV vulnerability correlation · dependency drift & baseline · policy complianc
   SPDX licenses**, an **unknown-license** mode (allow/warn/deny), **banned packages**
   (by name/ecosystem/version), and a **max vulnerability severity** gate. Any
   error-level violation fails the build.
+- **Reporting & GRC** — `report` writes a combined **JSON / CSV / HTML** report
+  (SBOM + vulnerabilities + policy violations + compliance roll-up). Compliance maps
+  to **NTIA minimum elements**, **CISA SBOM**, **OWASP SCVS**, and **NIST SSDF**.
+- **CI / pre-commit** — ships `.pre-commit-hooks.yaml` (`sbom-audit`, `sbom-policy`)
+  and a GitHub Actions workflow (test matrix + SBOM artifact + vulnerability gate).
 - **License normalization** — license strings mapped to SPDX IDs (`Apache License,
   Version 2.0` → `Apache-2.0`); unknown values pass through.
 - **Direct vs transitive** classification where the lockfile encodes it; a `_merge`
@@ -108,6 +113,10 @@ python main.py audit --path . --baseline sbom-baseline.json   # only NEW vulns
 # Enforce a license / banned-package / vulnerability policy
 python main.py check --path . --policy config/policy.example.yaml
 python main.py check --path . --policy policy.yaml --offline   # skip the OSV audit
+
+# Combined supply-chain report (SBOM + vulns + policy + compliance)
+python main.py report --path . -o report.html --policy config/policy.example.yaml
+python main.py report --path . -o report.json
 
 # Inventory the resolved components
 python main.py list-components --path .
@@ -182,11 +191,14 @@ SBOM-Security/
 │   ├── osv.py                  # OSV.dev client + run_audit() correlation
 │   ├── version.py · drift.py · baseline.py   # version compare, diff, snapshot
 │   ├── policy.py               # license/package/vuln policy engine
+│   ├── reporter.py             # JSON/CSV/HTML combined report
+│   ├── compliance.py           # NTIA/CISA/OWASP SCVS/NIST SSDF mapping
 │   ├── banner.py               # CLI banner
 │   └── logger.py               # structlog setup
 ├── parsers/                    # BaseParser + python + node + maven + go
 ├── config/policy.example.yaml  # policy template
-└── tests/                      # 49 pytest tests (test_sbom / test_phase2-5)
+├── .pre-commit-hooks.yaml · .github/workflows/ci.yml
+└── tests/                      # 55 pytest tests (test_sbom / test_phase2-6)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
@@ -202,14 +214,14 @@ See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
 | 3 | Vulnerability correlation (OSV.dev), `audit`, severity gate | ✅ Complete |
 | 4 | Dependency drift & baseline (added/removed/upgraded) | ✅ Complete |
 | 5 | Policy & license compliance (allow/deny, banned packages) | ✅ Complete |
-| 6 | HTML/JSON/CSV reports, pre-commit + CI, GRC mapping (CISA/NTIA/SCVS) | Planned |
+| 6 | HTML/JSON/CSV reports, pre-commit + CI, GRC mapping (CISA/NTIA/SCVS/SSDF) | ✅ Complete |
 
 ---
 
 ## Testing
 
 ```bash
-pytest                # 49 tests
+pytest                # 55 tests
 pytest --cov=core --cov=parsers
 ```
 

@@ -136,6 +136,33 @@ def _sev_style(sev: VulnSeverity) -> str:
     return _VULN_STYLE.get(sev, sev.value)
 
 
+@cli.command("report")
+@click.option("--path", default=".", help="Project directory to scan.")
+@click.option("-o", "--output", required=True, help="Report file (.html / .json / .csv).")
+@click.option("--policy", "policy_path", default=None, help="Optional policy YAML to evaluate.")
+@click.option("--offline", is_flag=True, default=False, help="Skip the OSV audit.")
+@click.option("--timeout", type=float, default=20.0)
+def report(path: str, output: str, policy_path: str | None, offline: bool, timeout: float) -> None:
+    """Generate a combined supply-chain report (SBOM + vulns + policy + GRC)."""
+    from core.reporter import write_report
+
+    sbom = SbomGenerator().generate(path)
+    audited = False
+    if not offline:
+        from core.osv import OSVClient, run_audit
+        audited = run_audit(sbom.components, OSVClient(timeout=timeout))
+
+    violations = None
+    if policy_path:
+        from core.policy import Policy
+        violations = Policy.load(policy_path).evaluate(sbom)
+
+    out = write_report(output, sbom, violations=violations, audited=audited)
+    vulns = sum(len(c.vulnerabilities) for c in sbom.components)
+    console.print(f"[green]Report written:[/] {out} "
+                  f"({sbom.count} components, {vulns} vulnerabilities)")
+
+
 @cli.command("check")
 @click.option("--path", default=".", help="Project directory to scan.")
 @click.option("--policy", "policy_path", default=None,
