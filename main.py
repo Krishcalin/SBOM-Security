@@ -59,11 +59,14 @@ def generate(path: str, output: str | None, fmt: str, app_name: str | None) -> N
 @cli.command("audit")
 @click.option("--path", default=".", help="Project directory to scan.")
 @click.option("--timeout", type=float, default=20.0, help="OSV API timeout (seconds).")
+@click.option("--baseline", "baseline_path", default=None,
+              help="Baseline JSON; report only vulnerabilities not already in it.")
 @click.option("--format", "fmt", type=click.Choice(["table", "json", "cyclonedx"]),
               default="table")
 @click.option("--fail-on", type=click.Choice([s.value for s in VulnSeverity]), default=None,
               help="Exit 1 if any vulnerability is at/above this severity (CI gate).")
-def audit(path: str, timeout: float, fmt: str, fail_on: str | None) -> None:
+def audit(path: str, timeout: float, baseline_path: str | None, fmt: str,
+          fail_on: str | None) -> None:
     """Generate an SBOM for PATH, then correlate components with OSV vulnerabilities."""
     from core.osv import OSVClient, run_audit
 
@@ -73,6 +76,13 @@ def audit(path: str, timeout: float, fmt: str, fail_on: str | None) -> None:
         console.print("[yellow]OSV query failed (offline?) — results may be incomplete.[/]")
 
     findings = [(c, v) for c in sbom.components for v in c.vulnerabilities]
+    if baseline_path:
+        from core.baseline import Baseline
+        base = Baseline.load(baseline_path)
+        total = len(findings)
+        findings = [(c, v) for c, v in findings if not base.knows_vuln(v)]
+        console.print(f"[dim]baseline: {total - len(findings)} known vuln(s) suppressed, "
+                      f"{len(findings)} new[/]")
 
     if fmt == "cyclonedx":
         click.echo(cyclonedx.dumps(sbom))
@@ -124,6 +134,78 @@ _VULN_STYLE = {
 
 def _sev_style(sev: VulnSeverity) -> str:
     return _VULN_STYLE.get(sev, sev.value)
+
+
+@cli.command("baseline")
+@click.option("--path", default=".", help="Project directory to snapshot.")
+@click.option("-o", "--output", default="sbom-baseline.json", help="Baseline output path.")
+@click.option("--audit", "do_audit", is_flag=True, default=False,
+              help="Run OSV audit first so the baseline records known vulnerabilities.")
+@click.option("--timeout", type=float, default=20.0)
+def baseline_cmd(path: str, output: str, do_audit: bool, timeout: float) -> None:
+    """Write a baseline snapshot of the current components (and known vulns)."""
+    from core.baseline import Baseline
+
+    sbom = SbomGenerator().generate(path)
+    if do_audit:
+        from core.osv import OSVClient, run_audit
+        run_audit(sbom.components, OSVClient(timeout=timeout))
+    base = Baseline.from_sbom(sbom)
+    out = base.write(output)
+    console.print(f"[green]Baseline written:[/] {out} "
+                  f"({len(base.components)} components, {len(base.vulnerabilities)} known vuln id(s))")
+
+
+@cli.command("drift")
+@click.option("--path", default=".", help="Project directory to scan.")
+@click.option("--baseline", "baseline_path", required=True, help="Baseline JSON to compare against.")
+@click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
+@click.option("--fail-on-drift", is_flag=True, default=False,
+              help="Exit 1 if any dependency drift is detected (CI gate).")
+def drift(path: str, baseline_path: str, fmt: str, fail_on_drift: bool) -> None:
+    """Compare the current components against a baseline (added/removed/up/downgraded)."""
+    from core.baseline import Baseline
+    from core.drift import diff
+
+    base = Baseline.load(baseline_path)
+    sbom = SbomGenerator().generate(path)
+    result = diff(base.as_components(), sbom.components)
+
+    if fmt == "json":
+        console.print_json(data={
+            "root": sbom.root,
+            "unchanged": result.unchanged,
+            "by_kind": result.by_kind(),
+            "changes": [{"ecosystem": c.ecosystem, "name": c.name, "kind": c.kind,
+                         "old_version": c.old_version, "new_version": c.new_version}
+                        for c in result.changes],
+        })
+    elif not result.changes:
+        console.print("[green]No dependency drift.[/]")
+        console.print(f"[dim]{result.unchanged} components unchanged[/]")
+    else:
+        table = Table("Change", "Ecosystem", "Component", "From", "To",
+                      title=f"Dependency drift — {len(result.changes)} change(s)")
+        for c in result.changes:
+            table.add_row(_drift_style(c.kind), c.ecosystem, c.name,
+                          c.old_version or "-", c.new_version or "-")
+        console.print(table)
+        summary = ", ".join(f"{k}: {v}" for k, v in sorted(result.by_kind().items()))
+        console.print(f"[dim]{summary} · {result.unchanged} unchanged[/]")
+
+    if fail_on_drift and result.has_changes:
+        console.print("[red]Gate failed:[/] dependency drift detected.")
+        raise SystemExit(1)
+
+
+_DRIFT_STYLE = {
+    "added": "[green]added[/]", "removed": "[red]removed[/]",
+    "upgraded": "[cyan]upgraded[/]", "downgraded": "[yellow]downgraded[/]",
+}
+
+
+def _drift_style(kind: str) -> str:
+    return _DRIFT_STYLE.get(kind, kind)
 
 
 @cli.command("list-components")

@@ -9,7 +9,7 @@ of the four KIZEN tools derived from the AccuKnox "Code to Runtime" platform;
 maps to AccuKnox **SBOM / supply-chain security**.
 
 **Repository**: https://github.com/Krishcalin/SBOM-Security
-**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-3 complete (33 tests)
+**Python**: 3.10+ · **License**: MIT · **Status**: Phases 1-4 complete (40 tests)
 
 ---
 
@@ -28,6 +28,9 @@ SBOM-Security/
 │   ├── licenses.py             # license string -> SPDX-ID normalization
 │   ├── cvss.py                 # CVSS v3.x vector -> base score + severity bucket
 │   ├── osv.py                  # OSV.dev client + run_audit() vuln correlation
+│   ├── version.py              # cross-ecosystem version comparison
+│   ├── drift.py                # diff() two component sets -> added/removed/up/downgraded
+│   ├── baseline.py             # Baseline snapshot (components + known vuln ids)
 │   ├── banner.py               # ANSI-Shadow CLI banner (bare invocation)
 │   └── logger.py               # structlog setup
 ├── parsers/
@@ -41,6 +44,7 @@ SBOM-Security/
 ├── tests/test_sbom.py          # 13 pytest tests (Phase 1)
 ├── tests/test_phase2.py        # 10 pytest tests (Maven/Go/licenses/SPDX)
 ├── tests/test_phase3.py        # 10 pytest tests (CVSS/OSV/audit, no network)
+├── tests/test_phase4.py        # 7 pytest tests (version/drift/baseline)
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -77,6 +81,11 @@ SBOM-Security/
   positives). CycloneDX output gains a `vulnerabilities` array when present.
 - **`cvss.base_score(vector)`** — CVSS v3.x base score; `severity_from_score()`
   buckets none/low/medium/high/critical.
+- **`drift.diff(old, new)`** — group components by (ecosystem, name), compare version
+  sets → `Change`s (added/removed/upgraded/downgraded via `version.compare`).
+- **`Baseline`** — snapshot of components + known vuln ids; `from_sbom`, `write`,
+  `load`, `as_components()` (feeds `drift.diff`), `knows_vuln(v)` (matches id/osv_id/
+  aliases). Powers `drift` and `audit --baseline` (report only *new* vulns).
 
 ### Design principles
 
@@ -130,9 +139,13 @@ SBOM-Security/
 - [x] CycloneDX output gains a `vulnerabilities` array
 - [x] 10 new pytest tests (33 total), offline (HTTP injected); live OSV verified
 
-### Phase 4 — Dependency drift & baseline
-- [ ] Diff two SBOMs: added / removed / upgraded / downgraded components
-- [ ] Baseline file; alert only on new components or newly-vulnerable ones
+### Phase 4 — Dependency drift & baseline (COMPLETE)
+- [x] `core/version.py` cross-ecosystem comparator; `core/drift.py` `diff()` →
+      added / removed / upgraded / downgraded
+- [x] `core/baseline.py` snapshot (components + known vuln ids); `drift` command
+      with `--fail-on-drift`; `baseline` command (`--audit` to record known vulns)
+- [x] `audit --baseline` reports only newly-introduced vulnerabilities
+- [x] 7 new pytest tests (40 total); drift + baseline workflows verified live
 
 ### Phase 5 — Policy & license compliance
 - [ ] License allow/deny policy (YAML), banned packages, max-severity gates
@@ -162,6 +175,9 @@ python main.py generate --path . --format spdx -o sbom.spdx.json
 python main.py audit --path .                           # OSV vuln correlation
 python main.py audit --path . --fail-on high            # CI gate
 python main.py audit --path . --format cyclonedx        # SBOM + vulnerabilities
+python main.py baseline --path . --audit -o sbom-baseline.json   # snapshot + known vulns
+python main.py drift --path . --baseline sbom-baseline.json      # added/removed/up/downgraded
+python main.py audit --path . --baseline sbom-baseline.json      # only NEW vulnerabilities
 python main.py list-components --path . --ecosystem npm
 python main.py list-components --path . --format json
 ```

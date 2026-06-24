@@ -9,15 +9,16 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-33%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen.svg)](tests/)
 
 Part of the KIZEN security portfolio. Where the **Secrets Scanner** finds
 credentials in code, SBOM Security maps the *dependencies* that code pulls in —
 the software supply chain — and the risk they carry. Maps to the AccuKnox
 **SBOM / supply-chain security** capability.
 
-**Status:** Phases 1–3 complete (CycloneDX + SPDX generation across Python, Node,
-Maven, Go · OSV vulnerability correlation) · **Python** 3.10+ · **License** MIT
+**Status:** Phases 1–4 complete (CycloneDX + SPDX across Python, Node, Maven, Go ·
+OSV vulnerability correlation · dependency drift & baseline) · **Python** 3.10+ ·
+**License** MIT
 
 ---
 
@@ -49,6 +50,10 @@ Maven, Go · OSV vulnerability correlation) · **Python** 3.10+ · **License** M
   CVEs with **CVSS score, severity, and fixed-in version** to each component, and
   gates CI with `--fail-on <severity>`. Network errors fail safe (no false
   positives); CycloneDX output gains a `vulnerabilities` array.
+- **Dependency drift & baseline** — snapshot a project with `baseline`, then `drift`
+  reports **added / removed / upgraded / downgraded** components against it (cross-
+  ecosystem version comparison); `--fail-on-drift` gates CI. `audit --baseline`
+  reports only **newly-introduced** vulnerabilities, keeping accepted risk quiet.
 - **License normalization** — license strings mapped to SPDX IDs (`Apache License,
   Version 2.0` → `Apache-2.0`); unknown values pass through.
 - **Direct vs transitive** classification where the lockfile encodes it; a `_merge`
@@ -89,6 +94,12 @@ python main.py generate --path . --format spdx -o sbom.spdx.json
 python main.py audit --path .
 python main.py audit --path . --fail-on high            # CI gate on HIGH+
 python main.py audit --path . --format cyclonedx        # SBOM enriched with vulns
+
+# Track dependency drift against a baseline snapshot
+python main.py baseline --path . --audit -o sbom-baseline.json
+python main.py drift --path . --baseline sbom-baseline.json
+python main.py drift --path . --baseline sbom-baseline.json --fail-on-drift
+python main.py audit --path . --baseline sbom-baseline.json   # only NEW vulns
 
 # Inventory the resolved components
 python main.py list-components --path .
@@ -142,11 +153,12 @@ SBOM-Security/
 │   ├── licenses.py             # license string -> SPDX-ID normalization
 │   ├── cvss.py                 # CVSS v3.x base score + severity bucket
 │   ├── osv.py                  # OSV.dev client + run_audit() correlation
+│   ├── version.py · drift.py · baseline.py   # version compare, diff, snapshot
 │   ├── banner.py               # CLI banner
 │   └── logger.py               # structlog setup
 ├── parsers/                    # BaseParser + python + node + maven + go
 ├── config/                     # policy / settings (later phases)
-└── tests/                      # 33 pytest tests (test_sbom / test_phase2 / test_phase3)
+└── tests/                      # 40 pytest tests (test_sbom / test_phase2-4)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
@@ -160,7 +172,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
 | 1 | CycloneDX generation (Python + Node) | ✅ Complete |
 | 2 | Maven + Go parsers, license/SPDX-ID normalization, SPDX export | ✅ Complete |
 | 3 | Vulnerability correlation (OSV.dev), `audit`, severity gate | ✅ Complete |
-| 4 | Dependency drift & baseline (added/removed/upgraded) | Planned |
+| 4 | Dependency drift & baseline (added/removed/upgraded) | ✅ Complete |
 | 5 | Policy & license compliance (allow/deny, banned packages) | Planned |
 | 6 | HTML/JSON/CSV reports, pre-commit + CI, GRC mapping (CISA/NTIA/SCVS) | Planned |
 
@@ -169,7 +181,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture detail and the full phase roadmap.
 ## Testing
 
 ```bash
-pytest                # 33 tests
+pytest                # 40 tests
 pytest --cov=core --cov=parsers
 ```
 
